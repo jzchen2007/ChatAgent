@@ -10,6 +10,7 @@ if (typeof app === 'undefined') {
 
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const https = require('https');
 
 let mainWindow;
@@ -249,14 +250,16 @@ ipcMain.handle('chat', async (event, messages) => {
     }
 
     const options = {
-      hostname: endpoint.hostname,
-      port: endpoint.port || 443,
+      hostname: endpoint.hostname === 'localhost' ? '127.0.0.1' : endpoint.hostname,
+      port: endpoint.port ? Number(endpoint.port) : (endpoint.protocol === 'https:' ? 443 : 80),
       path: pathname,
       method: 'POST',
       headers
     };
 
-    const req = https.request(options, (res) => {
+    // 根据协议选择 http/https（支持本地网关等 HTTP 接口）
+    const requester = endpoint.protocol === 'https:' ? https : http;
+    const req = requester.request(options, (res) => {
       res.setEncoding('utf-8');
 
       // 非 200 响应作为错误处理
