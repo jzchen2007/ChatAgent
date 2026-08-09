@@ -122,7 +122,7 @@ function autoResize() {
   userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
 }
 
-// ========== 发送消息（带上下文） ==========
+// ========== 发送消息（带上下文，流式输出） ==========
 async function sendMessage() {
   const message = userInput.value.trim();
   if (!message) return;
@@ -142,9 +142,63 @@ async function sendMessage() {
   sendBtn.disabled = true;
 
   try {
+    // 流式输出：先创建空消息，再逐步填充内容
+    const streamMsg = addMessage('assistant', '');
+    const contentDiv = streamMsg.querySelector('.message-content');
+    let streamFinished = false;
+    let offChunk;
+    let offEnd;
+
+    // 注册流式监听
+    offChunk = window.electronAPI.onChatStreamChunk((chunk) => {
+      if (streamFinished || !contentDiv) return;
+      // 增量追加文本并实时渲染 Markdown
+      const accumulated = (contentDiv.dataset.accumulated || '') + chunk;
+      contentDiv.dataset.accumulated = accumulated;
+      if (typeof marked !== 'undefined') {
+        contentDiv.innerHTML = marked.parse(accumulated);
+        highlightCodeBlocks(contentDiv);
+        addCopyButtons(contentDiv);
+      } else {
+        contentDiv.textContent = accumulated;
+      }
+      scrollToBottom();
+    });
+    
+    offEnd = window.electronAPI.onChatStreamEnd(() => {
+      streamFinished = true;
+      if (offChunk) offChunk();
+    });
+    
+    // 初始化累计文本
+    contentDiv.dataset.accumulated = '';
+    
+    // 发送请求（主进程会通过 webContents.send 推送 chunk）
     const response = await window.electronAPI.chat(conversationHistory);
+    
+    // 清理加载动画
     removeMessage(loadingMsg);
-    addMessage('assistant', response);
+    
+    // 流式输出已完成，无需重复渲染
+    if (streamFinished) {
+      if (offEnd) offEnd();
+      // 将流式输出内容添加到对话历史
+      const streamedContent = contentDiv?.dataset.accumulated || response;
+      conversationHistory.push({ role: 'assistant', content: streamedContent });
+      return;
+    }
+    
+    // 回退：流式未触发，手动渲染完整内容
+    if (contentDiv) {
+      if (typeof marked !== 'undefined') {
+        contentDiv.innerHTML = marked.parse(response);
+        highlightCodeBlocks(contentDiv);
+        addCopyButtons(contentDiv);
+      } else {
+        contentDiv.textContent = response;
+      }
+    }
+    
     // 添加到对话历史（上下文记忆）
     conversationHistory.push({ role: 'assistant', content: response });
   } catch (error) {

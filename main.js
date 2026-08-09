@@ -83,6 +83,7 @@ ipcMain.handle('get-api-key', () => {
 
 // 聊天请求（主进程发起，界面通过 IPC 调用）
 // 支持传入对话历史（messages 数组），维持上下文
+// 支持流式输出（SSE streaming）
 ipcMain.handle('chat', async (event, messages) => {
   const config = readConfig();
   const apiKey = config.apiKey;
@@ -98,7 +99,7 @@ ipcMain.handle('chat', async (event, messages) => {
     const postData = JSON.stringify({
       model: 'deepseek-chat',
       messages: conversationMessages,
-      stream: false
+      stream: true
     });
 
     const options = {
@@ -108,28 +109,61 @@ ipcMain.handle('chat', async (event, messages) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'text/event-stream'
       }
     };
 
     const req = https.request(options, (res) => {
-      res.setEncoding('utf-8'); // 明确指定 UTF-8 编码，防止中文乱码
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        try {
-          const response = JSON.parse(data);
-          if (response.choices && response.choices[0] && response.choices[0].message) {
-            resolve(response.choices[0].message.content);
-          } else if (response.error) {
-            reject(new Error(response.error.message || 'API 请求失败'));
-          } else {
-            reject(new Error('无法解析响应'));
+      res.setEncoding('utf-8');
+
+      // 非 200 响应作为错误处理
+      if (res.statusCode !== 200) {
+        let errData = '';
+        res.on('data', chunk => errData += chunk);
+        res.on('end', () => {
+          try {
+            const errJson = JSON.parse(errData);
+            reject(new Error(errJson.error?.message || `HTTP ${res.statusCode}`));
+          } catch {
+            reject(new Error(`HTTP ${res.statusCode}`));
           }
-        } catch (e) {
-          reject(new Error('响应解析失败: ' + e.message));
+        });
+        return;
+      }
+
+      let buffer = '';
+      let fullContent = '';
+
+      res.on('data', (chunk) => {
+        buffer += chunk;
+        // 解析 SSE 流
+        const lines = buffer.split(/\r?\n/);
+        // 最后一段可能不完整，保留在 buffer 中
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          if (line === 'data: [DONE]') {
+            // 流结束
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('chat-stream-end', fullContent);
+            }
+            resolve(fullContent);
+            return;
+          }
+          if (line.startsWith('data: ')) {
+            try {
+              const json = JSON.parse(line.slice(6));
+              const delta = json.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullContent += delta;
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  mainWindow.webContents.send('chat-stream-chunk', delta);
+                }
+              }
+            } catch {}
+          }
         }
       });
     });
