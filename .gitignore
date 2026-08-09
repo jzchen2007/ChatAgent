@@ -29,3 +29,6 @@ config.json
 
 # electron-builder 缓存
 electron-builder.yml.bak
+
+# 程序工作文件
+.cowork-temp/

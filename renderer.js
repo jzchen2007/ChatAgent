@@ -23,12 +23,7 @@ function highlightCodeBlocks(container) {
   const blocks = container.querySelectorAll('pre code');
   blocks.forEach((el) => {
     try {
-      if (el.classList.length > 0 && hljs.getLanguage) {
-        // 已有语言类名（如 language-python），直接高亮
-        hljs.highlightElement(el);
-      } else {
-        hljs.highlightElement(el);
-      }
+      hljs.highlightElement(el);
     } catch (e) {
       console.warn('代码高亮失败:', e);
     }
@@ -44,13 +39,34 @@ const statusText = document.getElementById('statusText');
 const apiKeyInput = document.getElementById('apiKey');
 const saveKeyBtn = document.getElementById('saveKeyBtn');
 const saveStatus = document.getElementById('saveStatus');
+const providerSelect = document.getElementById('providerSelect');
+const baseUrlInput = document.getElementById('baseUrlInput');
+const modelInput = document.getElementById('modelInput');
+const modelList = document.getElementById('modelList');
+const providerNote = document.getElementById('providerNote');
 
 let hasApiKey = false;
+let currentConfig = null;   // 当前配置（getConfig 返回值）
+let providers = [];         // 服务商模板列表
+let isInitDone = false;
 
 // ========== 对话历史（上下文记忆） ==========
+// 系统提示词泛化，不绑定单一模型厂商
+const SYSTEM_PROMPT = '你是 ChatAgent，一个支持多模型接入的通用 AI 助手。你特别擅长帮助大学计算机专业学生解答编程、算法、数据结构、操作系统、计算机网络等课程问题。请用友好、专业的方式回答，代码示例要加语言标签以便高亮。';
+
 let conversationHistory = [
-  { role: 'system', content: '你是 DeepSeek，一个由深度求索公司创造的人工智能助手。你特别擅长帮助大学计算机专业学生解答编程、算法、数据结构、操作系统、计算机网络等课程问题。请用友好、专业的方式回答，代码示例要加语言标签以便高亮。' }
+  { role: 'system', content: SYSTEM_PROMPT }
 ];
+
+// ========== 服务商模板工具 ==========
+function getProviderById(id) {
+  return providers.find(p => p.id === id) || null;
+}
+
+function getProviderLabel(id) {
+  const p = getProviderById(id);
+  return p ? p.label : id;
+}
 
 // ========== 初始化 ==========
 async function init() {
@@ -67,34 +83,91 @@ async function init() {
   }
 
   try {
-    const key = await window.electronAPI.getApiKey();
-    hasApiKey = !!key;
-    if (hasApiKey) {
-      apiKeyInput.value = '********';
-      updateApiStatus(true);
-    } else {
-      updateApiStatus(false);
+    // 加载服务商模板
+    providers = await window.electronAPI.getProviders();
+    fillProviderSelect();
+
+    // 加载已保存配置
+    currentConfig = await window.electronAPI.getConfig();
+    if (currentConfig) {
+      providerSelect.value = currentConfig.provider || 'deepseek';
+      applyProviderTemplate(false);
+      if (currentConfig.baseUrl) baseUrlInput.value = currentConfig.baseUrl;
+      if (currentConfig.model) modelInput.value = currentConfig.model;
+      hasApiKey = !!currentConfig.apiKey;
+      if (hasApiKey) {
+        apiKeyInput.value = '********';
+        updateApiStatus(true);
+      } else {
+        updateApiStatus(false);
+      }
     }
   } catch (err) {
-    console.error('API Key 检查失败:', err);
+    console.error('配置加载失败:', err);
     statusText.textContent = '检查失败';
     statusDot.classList.add('error');
     statusDot.classList.remove('connected');
   }
 
-  sendBtn.addEventListener('click', sendMessage);
-  userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  // 事件绑定（只绑定一次）
+  if (!isInitDone) {
+    isInitDone = true;
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    saveKeyBtn.addEventListener('click', saveConfig);
+    userInput.addEventListener('input', autoResize);
+    providerSelect.addEventListener('change', () => {
+      applyProviderTemplate(true);
+    });
+  }
+}
+
+// 填充服务商下拉框
+function fillProviderSelect() {
+  providerSelect.innerHTML = '';
+  providers.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.label;
+    providerSelect.appendChild(opt);
   });
-  saveKeyBtn.addEventListener('click', saveApiKey);
-  userInput.addEventListener('input', autoResize);
+}
+
+// 切换服务商时应用模板（baseUrl / 模型列表 / 提示）
+function applyProviderTemplate(resetFields) {
+  const provider = getProviderById(providerSelect.value);
+  if (!provider) return;
+
+  // 更新模型 datalist
+  modelList.innerHTML = '';
+  provider.models.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    modelList.appendChild(opt);
+  });
+
+  // 更新提示信息
+  providerNote.textContent = provider.note || '';
+
+  if (resetFields || !baseUrlInput.value) {
+    baseUrlInput.value = provider.baseUrl || '';
+  }
+  if (resetFields || !modelInput.value) {
+    modelInput.value = provider.models[0] || '';
+  }
 }
 
 function updateApiStatus(connected) {
-  if (connected) {
+  if (connected && currentConfig) {
+    statusDot.classList.add('connected');
+    statusDot.classList.remove('error');
+    statusText.textContent = `已配置 · ${getProviderLabel(currentConfig.provider)}`;
+  } else if (connected) {
     statusDot.classList.add('connected');
     statusDot.classList.remove('error');
     statusText.textContent = '已配置';
@@ -105,15 +178,48 @@ function updateApiStatus(connected) {
   }
 }
 
-async function saveApiKey() {
+async function saveConfig() {
+  const provider = providerSelect.value;
+  const baseUrl = baseUrlInput.value.trim();
+  const model = modelInput.value.trim();
   const key = apiKeyInput.value.trim();
+
+  // 校验
+  if (!baseUrl) {
+    saveStatus.textContent = '❌ 请填写 API 地址';
+    saveStatus.style.color = '#f44336';
+    setTimeout(() => saveStatus.textContent = '', 3000);
+    return;
+  }
+  if (!model) {
+    saveStatus.textContent = '❌ 请填写模型名称';
+    saveStatus.style.color = '#f44336';
+    setTimeout(() => saveStatus.textContent = '', 3000);
+    return;
+  }
+
+  const config = { provider, baseUrl, model };
+  // 只有用户输入了新 Key 才更新（'********' 表示未修改）
   if (key && key !== '********') {
-    await window.electronAPI.saveApiKey(key);
-    hasApiKey = true;
-    apiKeyInput.value = '********';
+    config.apiKey = key;
+  }
+
+  try {
+    await window.electronAPI.saveConfig(config);
+    // 刷新本地状态
+    currentConfig = await window.electronAPI.getConfig();
+    if (config.apiKey) {
+      hasApiKey = true;
+      apiKeyInput.value = '********';
+    }
     saveStatus.textContent = '✓ 已保存';
+    saveStatus.style.color = '#4caf50';
     setTimeout(() => saveStatus.textContent = '', 2000);
     updateApiStatus(true);
+  } catch (err) {
+    saveStatus.textContent = '❌ 保存失败: ' + err.message;
+    saveStatus.style.color = '#f44336';
+    setTimeout(() => saveStatus.textContent = '', 3000);
   }
 }
 
@@ -164,21 +270,21 @@ async function sendMessage() {
       }
       scrollToBottom();
     });
-    
+
     offEnd = window.electronAPI.onChatStreamEnd(() => {
       streamFinished = true;
       if (offChunk) offChunk();
     });
-    
+
     // 初始化累计文本
     contentDiv.dataset.accumulated = '';
-    
+
     // 发送请求（主进程会通过 webContents.send 推送 chunk）
     const response = await window.electronAPI.chat(conversationHistory);
-    
+
     // 清理加载动画
     removeMessage(loadingMsg);
-    
+
     // 流式输出已完成，无需重复渲染
     if (streamFinished) {
       if (offEnd) offEnd();
@@ -187,7 +293,7 @@ async function sendMessage() {
       conversationHistory.push({ role: 'assistant', content: streamedContent });
       return;
     }
-    
+
     // 回退：流式未触发，手动渲染完整内容
     if (contentDiv) {
       if (typeof marked !== 'undefined') {
@@ -198,23 +304,25 @@ async function sendMessage() {
         contentDiv.textContent = response;
       }
     }
-    
+
     // 添加到对话历史（上下文记忆）
     conversationHistory.push({ role: 'assistant', content: response });
   } catch (error) {
     removeMessage(loadingMsg);
-    addMessage('assistant', `❌ 发生错误：${error.message}\n\n请检查：\n1. API Key 是否正确\n2. 网络连接是否正常`);
+    addMessage('assistant', `❌ 发生错误：${error.message}\n\n请检查：\n1. API Key 是否正确\n2. API 地址 / 模型名称是否正确\n3. 网络连接是否正常`);
   }
 
   sendBtn.disabled = false;
 }
 
 // ========== 消息渲染 ==========
+const ASSISTANT_LABEL = 'AI 助手';
+
 function addMessage(role, content) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${role}`;
 
-  const label = role === 'user' ? '我' : 'DeepSeek';
+  const label = role === 'user' ? '我' : ASSISTANT_LABEL;
 
   const contentDiv = document.createElement('div');
   contentDiv.className = 'message-content';
@@ -252,6 +360,7 @@ function addMessage(role, content) {
 function addCopyButtons(container) {
   const preElements = container.querySelectorAll('pre');
   preElements.forEach(pre => {
+    if (pre.parentNode.classList.contains('code-block-wrapper')) return; // 已处理过
     const wrapper = document.createElement('div');
     wrapper.className = 'code-block-wrapper';
     pre.parentNode.insertBefore(wrapper, pre);
@@ -281,7 +390,7 @@ function addLoadingMessage() {
   const messageDiv = document.createElement('div');
   messageDiv.className = 'message assistant loading';
   messageDiv.innerHTML = `
-    <div class="message-label">DeepSeek</div>
+    <div class="message-label">${ASSISTANT_LABEL}</div>
     <div class="message-content"><span class="loading-dots">正在思考</span></div>
   `;
   chatContainer.appendChild(messageDiv);

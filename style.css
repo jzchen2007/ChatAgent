@@ -70,11 +70,17 @@ body {
 /* 设置区域 */
 .settings {
   background: #f5f5f5;
-  padding: 15px 30px;
+  padding: 12px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.settings-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid #e0e0e0;
 }
 
 .settings label {
@@ -83,13 +89,26 @@ body {
   white-space: nowrap;
 }
 
-.settings input {
-  flex: 1;
+.settings input,
+.settings select {
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 14px;
-  max-width: 400px;
+  background: #fff;
+  color: #333;
+}
+
+.settings select {
+  cursor: pointer;
+  flex: 0 0 auto;
+  min-width: 200px;
+  max-width: 260px;
+}
+
+.settings input {
+  flex: 1;
+  min-width: 0;
 }
 
 .settings button {
@@ -101,15 +120,23 @@ body {
   cursor: pointer;
   font-size: 14px;
   transition: background 0.3s;
+  white-space: nowrap;
 }
 
 .settings button:hover {
   background: #5568d3;
 }
 
+.settings-note {
+  font-size: 12px;
+  color: #999;
+  min-height: 16px;
+}
+
 #saveStatus {
   font-size: 12px;
   color: #4caf50;
+  white-space: nowrap;
 }
 
 /* 对话区域 */

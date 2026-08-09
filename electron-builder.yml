@@ -1,5 +1,5 @@
-appId: com.deepseek.chat
-productName: DeepSeek智能问答
+appId: com.chatagent.app
+productName: ChatAgent
 directories:
   output: release
   buildResources: build

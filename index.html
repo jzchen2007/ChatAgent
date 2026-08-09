@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;">
-  <title>DeepSeek 智能问答</title>
+  <title>ChatAgent - AI 智能助手</title>
   <link rel="stylesheet" href="style.css">
   <!-- Markdown 渲染 & 代码高亮 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
@@ -25,7 +25,7 @@
   <div class="container">
     <!-- 标题栏 -->
     <header class="header">
-      <h1>🤖 DeepSeek 智能问答</h1>
+      <h1>🤖 ChatAgent</h1>
       <div class="api-status" id="apiStatus">
         <span class="status-dot" id="statusDot"></span>
         <span id="statusText">检查中...</span>
@@ -34,18 +34,30 @@
 
     <!-- 设置区域 -->
     <div class="settings" id="settingsPanel">
-      <label for="apiKey">API Key：</label>
-      <input type="password" id="apiKey" placeholder="输入你的 DeepSeek API Key">
-      <button id="saveKeyBtn">保存</button>
-      <span id="saveStatus"></span>
+      <div class="settings-row">
+        <label for="providerSelect">服务商：</label>
+        <select id="providerSelect"></select>
+        <label for="modelInput">模型：</label>
+        <input type="text" id="modelInput" list="modelList" placeholder="选择或输入模型名称">
+        <datalist id="modelList"></datalist>
+      </div>
+      <div class="settings-row">
+        <label for="baseUrlInput">API 地址：</label>
+        <input type="text" id="baseUrlInput" placeholder="https://api.example.com/v1">
+        <label for="apiKey">API Key：</label>
+        <input type="password" id="apiKey" placeholder="输入 API Key">
+        <button id="saveKeyBtn">保存配置</button>
+        <span id="saveStatus"></span>
+      </div>
+      <div class="settings-note" id="providerNote"></div>
     </div>
 
     <!-- 对话区域 -->
     <div class="chat-container" id="chatContainer">
       <div class="welcome-message">
-        <p>👋 你好！我是 DeepSeek 智能助手</p>
-        <p>请在顶部输入你的问题，我会尽力帮助你回答！</p>
-        <p class="tip">💡 提示：需要先在设置中配置 API Key</p>
+        <p>👋 你好！我是 ChatAgent 智能助手</p>
+        <p>支持 DeepSeek / OpenAI / 通义千问 / 智谱 / Kimi / Claude 等主流模型</p>
+        <p class="tip">💡 提示：先在顶部设置中选择服务商并配置 API Key</p>
       </div>
     </div>
 
