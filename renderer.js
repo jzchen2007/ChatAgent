@@ -50,6 +50,14 @@ let currentConfig = null;   // 当前配置（getConfig 返回值）
 let providers = [];         // 服务商模板列表
 let isInitDone = false;
 
+// 欢迎语模板（清空对话后恢复）
+const WELCOME_HTML = `
+  <div class="welcome-message">
+    <p>👋 你好！我是 ChatAgent 智能助手</p>
+    <p>支持 DeepSeek / OpenAI / 通义千问 / 智谱 / Kimi / Claude 等主流模型</p>
+    <p class="tip">💡 提示：点击左侧 ⚙️ 配置服务商和 API Key</p>
+  </div>`;
+
 // ========== 对话历史（上下文记忆） ==========
 // 系统提示词泛化，不绑定单一模型厂商
 const SYSTEM_PROMPT = '你是 ChatAgent，一个支持多模型接入的通用 AI 助手。你特别擅长帮助大学计算机专业学生解答编程、算法、数据结构、操作系统、计算机网络等课程问题。请用友好、专业的方式回答，代码示例要加语言标签以便高亮。';
@@ -124,7 +132,52 @@ async function init() {
     providerSelect.addEventListener('change', () => {
       applyProviderTemplate(true);
     });
+    // 侧边栏：折叠/展开
+    document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+    // 侧边栏：面板切换
+    document.getElementById('navConfig').addEventListener('click', () => switchPanel('config'));
+    document.getElementById('navSettings').addEventListener('click', () => switchPanel('settings'));
+    // 设置：清空对话
+    document.getElementById('clearChatBtn').addEventListener('click', clearChat);
   }
+}
+
+// ========== 侧边栏 ==========
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebarToggle');
+  sidebar.classList.toggle('collapsed');
+  const collapsed = sidebar.classList.contains('collapsed');
+  btn.textContent = collapsed ? '▶' : '◀';
+  btn.title = collapsed ? '展开侧边栏' : '折叠侧边栏';
+}
+
+// 切换侧边栏面板（配置 / 设置）
+function switchPanel(name) {
+  const sidebar = document.getElementById('sidebar');
+  // 点击导航时自动展开
+  sidebar.classList.remove('collapsed');
+  document.getElementById('sidebarToggle').textContent = '◀';
+  document.getElementById('sidebarToggle').title = '折叠侧边栏';
+
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+
+  if (name === 'config') {
+    document.getElementById('navConfig').classList.add('active');
+    document.getElementById('panelConfig').classList.add('active');
+  } else {
+    document.getElementById('navSettings').classList.add('active');
+    document.getElementById('panelSettings').classList.add('active');
+  }
+}
+
+// 清空对话历史
+function clearChat() {
+  conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
+  chatContainer.innerHTML = WELCOME_HTML;
+  // 清空后聚焦输入框
+  userInput.focus();
 }
 
 // 填充服务商下拉框

@@ -3,72 +3,107 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
   <title>ChatAgent - AI 智能助手</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Markdown 渲染 & 代码高亮 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/java.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/cpp.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/c.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/sql.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/xml.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/css.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
+  <!-- Markdown 渲染 & 代码高亮（本地化，不依赖外网） -->
+  <link rel="stylesheet" href="lib/github.min.css">
+  <script src="lib/marked.min.js"></script>
+  <script src="lib/highlight.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <!-- 标题栏 -->
-    <header class="header">
-      <h1>🤖 ChatAgent</h1>
-      <div class="api-status" id="apiStatus">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">检查中...</span>
+  <div class="app-layout">
+    <!-- ========== 侧边栏 ========== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <button class="sidebar-toggle" id="sidebarToggle" title="折叠侧边栏">◀</button>
+        <span class="sidebar-title">ChatAgent</span>
       </div>
-    </header>
 
-    <!-- 设置区域 -->
-    <div class="settings" id="settingsPanel">
-      <div class="settings-row">
-        <label for="providerSelect">服务商：</label>
-        <select id="providerSelect"></select>
-        <label for="modelInput">模型：</label>
-        <input type="text" id="modelInput" list="modelList" placeholder="选择或输入模型名称">
-        <datalist id="modelList"></datalist>
-      </div>
-      <div class="settings-row">
-        <label for="baseUrlInput">API 地址：</label>
-        <input type="text" id="baseUrlInput" placeholder="https://api.example.com/v1">
-        <label for="apiKey">API Key：</label>
-        <input type="password" id="apiKey" placeholder="输入 API Key">
-        <button id="saveKeyBtn">保存配置</button>
-        <span id="saveStatus"></span>
-      </div>
-      <div class="settings-note" id="providerNote"></div>
-    </div>
+      <!-- 导航 -->
+      <nav class="sidebar-nav">
+        <button class="nav-item active" id="navConfig">
+          <span class="nav-icon">⚙️</span><span class="nav-text">配置</span>
+        </button>
+        <button class="nav-item" id="navSettings">
+          <span class="nav-icon">🛠️</span><span class="nav-text">设置</span>
+        </button>
+      </nav>
 
-    <!-- 对话区域 -->
-    <div class="chat-container" id="chatContainer">
-      <div class="welcome-message">
-        <p>👋 你好！我是 ChatAgent 智能助手</p>
-        <p>支持 DeepSeek / OpenAI / 通义千问 / 智谱 / Kimi / Claude 等主流模型</p>
-        <p class="tip">💡 提示：先在顶部设置中选择服务商并配置 API Key</p>
-      </div>
-    </div>
+      <!-- 面板区 -->
+      <div class="sidebar-panels">
+        <!-- 配置面板 -->
+        <div class="panel active" id="panelConfig">
+          <h3 class="panel-title">API 配置</h3>
+          <div class="settings-row">
+            <label for="providerSelect">服务商</label>
+            <select id="providerSelect"></select>
+          </div>
+          <div class="settings-row">
+            <label for="modelInput">模型</label>
+            <input type="text" id="modelInput" list="modelList" placeholder="选择或输入模型名称">
+            <datalist id="modelList"></datalist>
+          </div>
+          <div class="settings-row">
+            <label for="baseUrlInput">API 地址</label>
+            <input type="text" id="baseUrlInput" placeholder="https://api.example.com/v1">
+          </div>
+          <div class="settings-row">
+            <label for="apiKey">API Key</label>
+            <input type="password" id="apiKey" placeholder="输入 API Key">
+          </div>
+          <div class="settings-note" id="providerNote"></div>
+          <div class="settings-actions">
+            <button id="saveKeyBtn">保存配置</button>
+            <span id="saveStatus"></span>
+          </div>
+        </div>
 
-    <!-- 输入区域 -->
-    <div class="input-area">
-      <textarea 
-        id="userInput" 
-        placeholder="输入您的问题..."
-        rows="3"
-      ></textarea>
-      <button id="sendBtn">发送</button>
+        <!-- 设置面板 -->
+        <div class="panel" id="panelSettings">
+          <h3 class="panel-title">会话</h3>
+          <div class="settings-row">
+            <button id="clearChatBtn" class="danger-btn">🗑️ 清空对话</button>
+          </div>
+          <div class="settings-note">清空当前对话历史，开始新会话</div>
+          <h3 class="panel-title">关于</h3>
+          <div class="settings-note" id="aboutInfo">
+            ChatAgent v1.3.0<br>
+            多模型 AI 智能问答桌面应用
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ========== 主区域 ========== -->
+    <div class="main-area">
+      <!-- 标题栏 -->
+      <header class="header">
+        <h1>🤖 ChatAgent</h1>
+        <div class="api-status" id="apiStatus">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">检查中...</span>
+        </div>
+      </header>
+
+      <!-- 对话区域 -->
+      <div class="chat-container" id="chatContainer">
+        <div class="welcome-message">
+          <p>👋 你好！我是 ChatAgent 智能助手</p>
+          <p>支持 DeepSeek / OpenAI / 通义千问 / 智谱 / Kimi / Claude 等主流模型</p>
+          <p class="tip">💡 提示：点击左侧 ⚙️ 配置服务商和 API Key</p>
+        </div>
+      </div>
+
+      <!-- 输入区域 -->
+      <div class="input-area">
+        <textarea
+          id="userInput"
+          placeholder="输入您的问题..."
+          rows="3"
+        ></textarea>
+        <button id="sendBtn">发送</button>
+      </div>
     </div>
   </div>
 
