@@ -32,3 +32,6 @@ electron-builder.yml.bak
 
 # 绋嬪簭宸ヤ綔鏂囦欢
 .cowork-temp/
+
+# 误提交的依赖副本
+electron/
